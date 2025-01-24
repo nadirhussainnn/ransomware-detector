@@ -39,31 +39,13 @@ class SystemMetricsCollector:
         self.base_cpu = psutil.cpu_percent()
         self.base_memory = psutil.virtual_memory().percent
 
-        self.process_metrics = {
-            'created': 0,
-            'terminated': 0,
-            'prev_processes': set(psutil.pids())
-        }
         self.file_patterns = {
             'sequential_ops': 0,
-            'random_ops': 0,
             'accessed_files': deque(maxlen=10),
             'last_operation_time': {}
         }
         self.operation_sequences = deque(maxlen=20)
 
-    def track_process_changes(self):
-        while not self.stop_event.is_set():
-            curr_processes = set(psutil.pids())
-            created = len(curr_processes - self.process_metrics['prev_processes'])
-            terminated = len(self.process_metrics['prev_processes'] - curr_processes)
-            
-            if created > 0 or terminated > 0:
-                print(f"Process changes - Created: {created}, Terminated: {terminated}")
-                self.process_metrics['created'] += created
-                self.process_metrics['terminated'] += terminated
-                self.process_metrics['prev_processes'] = curr_processes
-            time.sleep(0.1)
                 
     def get_io_counts(self):
         try:
@@ -212,26 +194,22 @@ def compute_entropy(file_path):
     try:
         if not os.path.exists(file_path):
             return 0.0
-            
         with open(file_path, "rb") as f:
-            data = f.read(8192)  # Read first 8KB for efficiency
+            data = f.read(8192)  # Adjust this range for better sampling
         if not data:
             return 0.0
-            
-        byte_count = {}
+        byte_count = [0] * 256
         for byte in data:
-            byte_count[byte] = byte_count.get(byte, 0) + 1
-            
+            byte_count[byte] += 1
         total_bytes = len(data)
-        entropy = 0
-        
-        for count in byte_count.values():
-            prob = count / total_bytes
-            entropy -= prob * math.log2(prob)
-            
+        entropy = -sum(
+            (count / total_bytes) * math.log2(count / total_bytes)
+            for count in byte_count if count > 0
+        )
         return round(entropy, 3)
     except:
         return 0.0
+
 
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, metrics_collector, input_monitor):
@@ -239,30 +217,46 @@ class FileEventHandler(FileSystemEventHandler):
         self.last_timestamp = None
         self.metrics = metrics_collector
         self.input = input_monitor
+        self.logged_events = {}  # Track last events by file path
 
     def analyze_file_pattern(self, event_type, file_path):
         current_time = time.time()
         file_key = f"{event_type}:{file_path}"
-        
+
+        # Default: Increment random_operations for new or unrelated events
+        is_random = True
+
         if file_key in self.metrics.file_patterns['last_operation_time']:
             time_diff = current_time - self.metrics.file_patterns['last_operation_time'][file_key]
-            if time_diff < 0.5:  # Sequential threshold
+
+            if time_diff < 1.0:  # Sequential threshold
+                # Increment sequential operations if part of a burst
                 self.metrics.file_patterns['sequential_ops'] += 1
-                print(f"Sequential operation detected on {file_path}")
+                print(f"Sequential operation detected: {file_path}")
             else:
-                self.metrics.file_patterns['random_ops'] += 1
-                print(f"Random operation detected on {file_path}")
-        
+                # Reset sequential_ops if the sequence is broken
+                print(f"Sequence broken. Resetting sequential operations.")
+                self.metrics.file_patterns['sequential_ops'] = 0
+
+        # Update last operation time and accessed files
         self.metrics.file_patterns['last_operation_time'][file_key] = current_time
         self.metrics.file_patterns['accessed_files'].append(file_path)
-        
-        # Record operation sequence
+
+        # Record the operation in the sequence
         self.metrics.operation_sequences.append({
             'type': event_type,
             'path': file_path,
             'time': current_time
         })
+
+        # Reset sequence length if it reaches maxlen
+        if len(self.metrics.operation_sequences) == self.metrics.operation_sequences.maxlen:
+            print(f"Operation sequence reached max length ({self.metrics.operation_sequences.maxlen}). Resetting...")
+            self.metrics.operation_sequences.clear()
+
+        print(f"Sequential operations: {self.metrics.file_patterns['sequential_ops']}")
         print(f"Operation sequence length: {len(self.metrics.operation_sequences)}")
+
 
     def normalize_metrics(self, file_size, cpu_usage, memory_usage):
         norm_size = math.log2(file_size + 1) if file_size > 0 else 0
@@ -295,8 +289,6 @@ class FileEventHandler(FileSystemEventHandler):
         print(f"Size: {file_size}KB (normalized: {norm_size:.2f})")
         print(f"Entropy: {compute_entropy(file_path)}")
         print(f"Sequential ops: {self.metrics.file_patterns['sequential_ops']}")
-        print(f"Random ops: {self.metrics.file_patterns['random_ops']}")
-        print(f"Process changes - Created: {self.metrics.process_metrics['created']}, Terminated: {self.metrics.process_metrics['terminated']}")
 
         try:
             with open(RAW_DATA_CSV, mode="a", newline="") as f:
@@ -320,11 +312,7 @@ class FileEventHandler(FileSystemEventHandler):
                     self.metrics.security_states['firewall_disabled'],
                     self.metrics.security_states['defender_disabled'],
                     self.metrics.security_states['task_manager_disabled'],
-                    psutil.cpu_count(),
-                    self.metrics.process_metrics['created'],
-                    self.metrics.process_metrics['terminated'],
                     self.metrics.file_patterns['sequential_ops'],
-                    self.metrics.file_patterns['random_ops'],
                     len(self.metrics.operation_sequences)
                 ])
 
@@ -359,7 +347,7 @@ def main():
         print("Requesting admin privileges...")
         if sys.argv[-1] != 'asadmin':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__ + ' asadmin', None, 1)
-            sys.exit()
+            #sys.exit()
 
     if not os.path.exists(RAW_DATA_CSV):
         with open(RAW_DATA_CSV, mode="w", newline="") as f:
@@ -370,8 +358,7 @@ def main():
                 "cpu_usage", "memory_usage", "io_read_count", "io_write_count", 
                 "shadow_copy_count", "restore_point_count", "registry_edits",
                 "firewall_disabled", "defender_disabled", "task_manager_disabled",
-                "num_processors", "processes_created", "processes_terminated",
-                "sequential_operations", "random_operations", "operation_sequence_length"
+                "sequential_operations", "operation_sequence_length"
             ])
 
     metrics_collector = SystemMetricsCollector()
@@ -384,8 +371,7 @@ def main():
 
     metrics_thread = Thread(target=metrics_collector.monitor_metrics)
     registry_thread = Thread(target=metrics_collector.monitor_registry_changes)
-    process_thread = Thread(target=metrics_collector.track_process_changes)
-    process_thread.start()
+
     metrics_thread.start()
     registry_thread.start()
 
