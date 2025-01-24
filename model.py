@@ -53,6 +53,7 @@ def preprocess_dataset(df):
     scaler = StandardScaler()
     X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
     logging.info("\nFeatures standardized.")
+    joblib.dump(scaler, "scaler.pkl")
 
     return X_scaled, y
 
@@ -66,6 +67,8 @@ def check_dataset_balance(y):
     return balance
 
 def train_and_evaluate_models(X_train, X_test, y_train, y_test):
+    logging.info(X_train.info())
+
     """Train and evaluate multiple classifiers."""
     classifiers = {
         "Logistic Regression": LogisticRegression(max_iter=1000, class_weight='balanced'),
@@ -101,6 +104,18 @@ def save_best_model(results, classifiers, X_train, y_train):
 
     best_model = classifiers[best_model_name]
     best_model.fit(X_train, y_train)
+
+     # Check if the model has the feature_importances_ attribute
+    if hasattr(best_model, "feature_importances_"):
+        feature_importances = best_model.feature_importances_
+        plt.barh(X_train.columns, feature_importances)
+        plt.title(f"Feature Importances ({best_model_name})")
+        plt.xlabel("Importance")
+        plt.ylabel("Feature")
+        plt.show()
+    else:
+        logging.info(f"The model '{best_model_name}' does not support feature importance.")
+
     joblib.dump(best_model, "ransomware_detection_model.pkl")
     logging.info("Best model saved as 'ransomware_detection_model.pkl'.")
 

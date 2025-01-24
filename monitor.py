@@ -347,7 +347,7 @@ def main():
         print("Requesting admin privileges...")
         if sys.argv[-1] != 'asadmin':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__ + ' asadmin', None, 1)
-            #sys.exit()
+            sys.exit()
 
     if not os.path.exists(RAW_DATA_CSV):
         with open(RAW_DATA_CSV, mode="w", newline="") as f:

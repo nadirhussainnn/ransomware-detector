@@ -393,11 +393,22 @@ def inject_operations(duration=180):
     disable_system_restore()
     modify_registry()
 
-    operations = [
+    I1 = [
         "create_file", "create_folder", "rename_file", "encrypt_file",
         "encrypt_all_files",
         "compress_folder", "bulk_delete", "change_timestamps",
         "change_permission"
+    ]
+
+    I2 = [
+        "create_file", "create_folder", "rename_file", "encrypt_file",
+        "encrypt_all_files",
+        "compress_folder", "bulk_delete"
+    ]
+
+    I3 = [
+        "create_file", "rename_file", "encrypt_file",
+        "encrypt_all_files"
     ]
 
     gc.collect()  # Add at start
@@ -412,7 +423,7 @@ def inject_operations(duration=180):
             time.sleep(5)
             continue
 
-        operation = random.choice(operations)
+        operation = random.choice(I2)
 
         try:
             if operation == "create_file":
@@ -492,7 +503,7 @@ if __name__ == "__main__":
         logging.info("Script started")
         action = input("Enter 'inject' to inject ransomware or 'decrypt' to decrypt files: ").strip().lower()
         if action == 'inject':
-            inject_operations(duration=180)
+            inject_operations(duration=60)
         elif action == 'decrypt':
             load_metadata()
             decrypt_all_files(WORKING_DIR)
