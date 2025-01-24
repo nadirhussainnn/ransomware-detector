@@ -116,8 +116,8 @@ def save_best_model(results, classifiers, X_train, y_train):
     else:
         logging.info(f"The model '{best_model_name}' does not support feature importance.")
 
-    joblib.dump(best_model, "ransomware_detection_model.pkl")
-    logging.info("Best model saved as 'ransomware_detection_model.pkl'.")
+    joblib.dump(best_model, "best_model.pkl")
+    logging.info("Best model saved as 'best_model.pkl'.")
 
 def main():
     # Load and explore the dataset

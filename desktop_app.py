@@ -1,33 +1,71 @@
+"""
+Decription:     A desktop app, that monitors the data in real-time, sends it to saved_model, and returns status of prediction i.e Normal or anomaly
+Author:         Nadir Hussain
+Dated:          Jan 25, 2025
+"""
+
 import os
+import sys
 import time
-import psutil
-import ctypes
-import winreg
-from threading import Thread, Event
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-from pynput import keyboard, mouse
 import math
+from collections import deque
+import threading
+from threading import Thread, Event
+
+# For loading model and data processing
 import joblib
 import pandas as pd
-import sys
-from collections import deque
 from sklearn.preprocessing import StandardScaler
+
+# For monitoring filesystem events
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+# For capturing keyboard and mouse events
+from pynput import keyboard, mouse
+
+# for cpu, memory and other resource details
+import psutil
+
+# For registry edits, shadow copy and restore point operations
 import subprocess
+
+# For interacting with Windows APIs and settings
+import ctypes
+import winreg
 import win32api
 import win32security
 import win32con
-import threading
 
+# Allow user to select directory to be monitored
+import tkinter as tk
+from tkinter import filedialog
 
-MONITOR_DIR = "/Users/nadir/ransomware"
-MODEL_FILE = "ransomware_detection_model.pkl"
+# For alert
+from plyer import notification
+
+# Show all columns in pandas DF
+pd.set_option("display.max_columns", None)  
+
+# constant names of files to be loaded
+MODEL_FILE = "best_model.pkl"
 SCALER_FILE = "scaler.pkl"
 
-pd.set_option("display.max_columns", None)  # Show all columns
 
+# Allowing users to select a directory under monitoring, we could do this for whole system but it was making system too slow
+def select_directory():
+    root = tk.Tk()
+    root.withdraw()  # Hide main window
+    directory = filedialog.askdirectory(title="Select Directory to Monitor")
+    return directory
+
+"""
+Collects and monitors system metrics related to CPU, memory, I/O, and security settings.
+"""
 class SystemMetricsCollector:
     def __init__(self):
+
+        # Attributes for CPU, memory, I/O counts, security settings etc.
         self.cpu_usage = 0
         self.memory_usage = 0
         self.io_read_count = 0
@@ -52,6 +90,9 @@ class SystemMetricsCollector:
         }
         self.operation_sequences = deque(maxlen=20)
 
+    """
+    Calculates changes in disk I/O (read and write) in kilobytes.
+    """
     def get_io_counts(self):
         try:
             io_counters = psutil.disk_io_counters()
@@ -64,7 +105,7 @@ class SystemMetricsCollector:
             return delta_read, delta_write
         except:
             return 0, 0
-
+    """Counts the number of shadow copies on the system using the vssadmin tool."""
     def get_shadow_copy_count(self):
         try:
             si = subprocess.STARTUPINFO()
@@ -80,7 +121,8 @@ class SystemMetricsCollector:
         except Exception as e:
             print(f"Shadow copy error: {e}")
             return 0
-
+    
+    """Retrieves the count of system restore points using PowerShell commands."""
     def get_restore_points(self):
         try:
             si = subprocess.STARTUPINFO()
@@ -98,6 +140,7 @@ class SystemMetricsCollector:
             print(f"Restore point error: {e}")
             return 0
 
+    """ Checks for security settings for the system."""
     def check_security_settings(self):
         try:
             # Check Firewall - both paths must be disabled
@@ -135,6 +178,7 @@ class SystemMetricsCollector:
         except Exception as e:
             print(f"Error checking security settings: {e}")
 
+    """Monitors specific registry keys for changes in values."""
     def monitor_registry_changes(self):
         reg_keys = [
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Policies\Microsoft\Windows Defender"),
@@ -164,7 +208,7 @@ class SystemMetricsCollector:
                 except Exception as e:
                     print(f"Registry error: {e}")
             time.sleep(0.5)
-
+    """Continuously monitors CPU, memory, I/O, shadow copies, restore points, and security settings."""
     def monitor_metrics(self):
         while not self.stop_event.is_set():
             self.cpu_usage = psutil.cpu_percent(interval=0.1)  # Shorter interval
@@ -177,27 +221,36 @@ class SystemMetricsCollector:
             self.check_security_settings()
             time.sleep(0.1)
 
+
+"""Monitors keyboard presses and mouse movements"""
 class InputMonitor:
     def __init__(self):
         self.key_presses = 0
         self.mouse_activity = 0
 
+    """Increments the counter for key presses when a key is pressed.
+    In normal, key presses are more, exp: rename. While automated actions have very low key presses
+    """
     def on_key_press(self, key):
         self.key_presses += 1
 
+    """Increments the counter for mouse activity mouse is moved. In normal, mouse movements are more. While auto-mated actions have very low mouse movements"""
     def on_mouse_move(self, x, y):
         self.mouse_activity += 1
 
+    """Resets the counters for key presses and mouse activity to zero"""
     def reset_counters(self):
         self.key_presses = 0
         self.mouse_activity = 0
 
+
+"""Calculates the Shannon entropy of a file's content to estimate randomness. Encrypted files have more shannon entropy usually"""
 def compute_entropy(file_path):
     try:
         if not os.path.exists(file_path):
             return 0.0
         with open(file_path, "rb") as f:
-            data = f.read(8192)  # Adjust this range for better sampling
+            data = f.read(8192)  
         if not data:
             return 0.0
         byte_count = [0] * 256
@@ -212,6 +265,9 @@ def compute_entropy(file_path):
     except:
         return 0.0
 
+"""
+Handles file system events and integrates them with metrics collection, input monitoring, and machine learning model predictions for detecting anomalies.
+"""
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, metrics_collector, input_monitor, model, scaler):
         super().__init__()
@@ -224,15 +280,29 @@ class FileEventHandler(FileSystemEventHandler):
         self.last_aggregation_time = time.time()  # Track the last aggregation timestamp
         self.lock = threading.Lock()  # Thread-safe access to logged_events
 
-        # Start a thread for periodic aggregation
+        # Starts a thread for periodic aggregation. We call model for prediction every 3 seconds. Till 3 seconds, all events occured in monitored directory are preserved. If no events in past 3 seconds, we don't call predict
         self.aggregation_thread = threading.Thread(target=self.periodic_aggregation)
         self.aggregation_thread.daemon = True
         self.aggregation_thread.start()
 
     def periodic_aggregation(self):
         while True:
-            time.sleep(3)  # Call every 3 seconds
+            # Call every 3 seconds
+            time.sleep(3)  
             self.aggregate_and_predict()
+    
+    # Show notifications with title, message and icon
+    def show_notification(self, title, message):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(current_dir, "static", "icon.ico")
+
+        notification.notify(
+            title=title,
+            message=message,
+            app_icon = icon_path,
+            app_name="Ransomware Detector",
+            timeout=10
+        )
 
     def aggregate_and_predict(self):
         current_time = time.time()
@@ -244,14 +314,15 @@ class FileEventHandler(FileSystemEventHandler):
                 if current_time - event['timestamp'] <= 3
             ]
 
+            # If no events in past 3 seconds, we don't call predict
             if not recent_events:
                 return
 
             # Convert to DataFrame for aggregation
             df = pd.DataFrame(recent_events)
             print(f"Aggregating {len(df)} events from the last 3 seconds...")
-            print("df", df.info())
-            # Aggregate the events
+
+            # Aggregate the events, with same logic as it was used for training set data aggregation
             aggregated_data = pd.DataFrame({
                 'num_files_affected': [len(df)],
                 'num_varying_extensions': [df['file_extension'].nunique()],
@@ -274,11 +345,10 @@ class FileEventHandler(FileSystemEventHandler):
                 'operation_sequence_length': [len(self.metrics.operation_sequences)]
             })
 
-            print("aggregated_data", aggregated_data)
-            # Scale the aggregated data
+            # Scale the aggregated data. We use same scalar that was used for model training
             aggregated_data_scaled = self.scaler.transform(aggregated_data)
 
-                        # Predict probabilities using the model
+            # Predict probabilities using the model
             probabilities = self.model.predict_proba(aggregated_data_scaled)
 
             # Display the probabilities
@@ -286,20 +356,20 @@ class FileEventHandler(FileSystemEventHandler):
 
             # Get the label with the highest probability (if needed)
             prediction = self.model.classes_[probabilities.argmax(axis=1)]
-            print("Prediction:", prediction)
 
             # Example: Take action based on a probability threshold for "anomaly"
             anomaly_probability = probabilities[0, list(self.model.classes_).index("anomaly")]
-            if anomaly_probability > 0.5:  # Adjust threshold as needed
+            if anomaly_probability > 0.5: 
+                self.show_notification("🚨RANSOMWARE ATTACK🚨", "Ransomware attack detected! Take immediate action.")
+
                 print("Ransomware behavior detected! Take immediate action.")
             else:
                 print("System is normal.")
 
-
             self.logged_events = recent_events
 
-
-
+    
+    """Analyzes file operation patterns to detect sequential operations and track accessed files. Ransomware typically make large sequential actions for exp it may create folder, then files in it, and then encrypt them. Normal behavior is random"""
     def analyze_file_pattern(self, event_type, file_path):
         current_time = time.time()
         file_key = f"{event_type}:{file_path}"
@@ -310,8 +380,7 @@ class FileEventHandler(FileSystemEventHandler):
         if file_key in self.metrics.file_patterns['last_operation_time']:
             time_diff = current_time - self.metrics.file_patterns['last_operation_time'][file_key]
 
-            if time_diff < 1.0:  # Sequential threshold
-                # Increment sequential operations if part of a burst
+            if time_diff < 1.0:  # Sequential threshold i.e things done on folder/file in past 1 second
                 self.metrics.file_patterns['sequential_ops'] += 1
                 print(f"Sequential operation detected: {file_path}")
             else:
@@ -335,10 +404,7 @@ class FileEventHandler(FileSystemEventHandler):
             print(f"Operation sequence reached max length ({self.metrics.operation_sequences.maxlen}). Resetting...")
             self.metrics.operation_sequences.clear()
 
-        print(f"Sequential operations: {self.metrics.file_patterns['sequential_ops']}")
-        print(f"Operation sequence length: {len(self.metrics.operation_sequences)}")
-
-
+    # normalize file size, cpu and memory usage for consistent scaling
     def normalize_metrics(self, file_size, cpu_usage, memory_usage):
         norm_size = math.log2(file_size + 1) if file_size > 0 else 0
         norm_cpu = cpu_usage / 100.0
@@ -352,7 +418,8 @@ class FileEventHandler(FileSystemEventHandler):
             return 0
         except:
             return 0
-            
+    
+    """Logs details of a file system event and updates relevant metrics."""
     def log_event(self, event_type, file_path):
         timestamp = time.time()
         
@@ -366,6 +433,7 @@ class FileEventHandler(FileSystemEventHandler):
             self.metrics.memory_usage
         )
         
+        # This is raw data, means everything that happens is collected here. Aggregator will aggregate into bins, as I did for training, with separate aggregator.py code
         try:
             self.logged_events.append(
                 {
@@ -411,22 +479,31 @@ class FileEventHandler(FileSystemEventHandler):
         self.log_event("renamed", event.dest_path)
 
 def main():
-        # Keep console window open
+    # Keep console window open
     if not sys.stdout.isatty():
         sys.stdout = open('CONOUT$', 'w')
         sys.stderr = open('CONOUT$', 'w')
 
+    # Run under admin previliges
     if not ctypes.windll.shell32.IsUserAnAdmin():
         print("Requesting admin privileges...")
         if sys.argv[-1] != 'asadmin':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__ + ' asadmin', None, 1)
             sys.exit()
 
+     # Get directory from user
+    MONITOR_DIR = select_directory()
+    if not MONITOR_DIR:
+        print("No directory selected. Exiting...")
+        return
+        
+    # Multiple threads run and they monitor different things
     metrics_collector = SystemMetricsCollector()
     input_monitor = InputMonitor()
 
     keyboard_listener = keyboard.Listener(on_press=input_monitor.on_key_press)
     mouse_listener = mouse.Listener(on_move=input_monitor.on_mouse_move)
+
     keyboard_listener.start()
     mouse_listener.start()
 
@@ -436,9 +513,11 @@ def main():
     metrics_thread.start()
     registry_thread.start()
 
+    # Loading best model and scalar saved during train time
     model = joblib.load(MODEL_FILE)
     scaler = joblib.load(SCALER_FILE)
 
+    # Observe all events of files
     event_handler = FileEventHandler(metrics_collector, input_monitor, model, scaler)
     observer = Observer()
     observer.schedule(event_handler, MONITOR_DIR, recursive=True)
