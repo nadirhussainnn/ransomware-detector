@@ -389,9 +389,9 @@ def inject_operations(duration=180):
     start_time = time.time()
 
     # one time operations: typically, a ransomware disables and modifies these at start of its execution
-    disable_shadow_copies()
-    disable_system_restore()
-    modify_registry()
+    # disable_shadow_copies()
+    # disable_system_restore()
+    # modify_registry()
 
     I1 = [
         "create_file", "create_folder", "rename_file", "encrypt_file",
@@ -411,6 +411,10 @@ def inject_operations(duration=180):
         "encrypt_all_files"
     ]
 
+    I4 = [
+        "encrypt_file"
+    ]
+
     gc.collect()  # Add at start
     memory_threshold = 85  # Stop if memory usage exceeds 85%
 
@@ -423,7 +427,7 @@ def inject_operations(duration=180):
             time.sleep(5)
             continue
 
-        operation = random.choice(I3)
+        operation = random.choice(I4)
 
         try:
             if operation == "create_file":
@@ -487,7 +491,7 @@ def inject_operations(duration=180):
             print(f"Error during {operation}: {e}")
 
         # Random delay between operations 0.5 to 2 seconds
-        time.sleep(random.uniform(0.5, 2))  
+        time.sleep(random.uniform(2, 3))  
     save_metadata()
 
 if __name__ == "__main__":
