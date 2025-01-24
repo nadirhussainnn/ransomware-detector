@@ -423,7 +423,7 @@ def inject_operations(duration=180):
             time.sleep(5)
             continue
 
-        operation = random.choice(I2)
+        operation = random.choice(I3)
 
         try:
             if operation == "create_file":

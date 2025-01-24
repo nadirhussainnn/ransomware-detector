@@ -24,7 +24,13 @@ def aggregate_data_with_labels(input_file, output_file):
             (1328, 1837, "normal"),
             (1838, 2176, "normal"),
             (2177, 3599, "normal"),
-            (3600, 3817, "anomaly")
+            (3600, 3817, "anomaly"),
+            (3818, 6550, "normal"),
+            (6551, 6695, "anomaly"),
+            (6696, 6951, "anomaly"),
+            (6952, 7614, "normal"),
+            (7615, 7918, "anomaly"),
+            (7919, 9660 , "normal"),
         ]
 
         aggregated_data = []

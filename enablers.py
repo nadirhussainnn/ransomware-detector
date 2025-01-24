@@ -79,7 +79,7 @@ if __name__ == "__main__":
     set_firewall_state(enable=True)
     set_task_manager_state(enable=True)
 
-    create_restore_point("TestRestorePoint2")
+    create_restore_point("My restore point")
     list_restore_points()
 
     create_shadow_copy("C:")
