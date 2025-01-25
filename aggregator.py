@@ -1,5 +1,13 @@
+"""
+Decription:     Aggregates the raw_data.csv by creating a 3 second bins on data
+Author:         Nadir Hussain
+Dated:          Jan 25, 2025
+"""
 import pandas as pd
 
+"""
+Aggregates raw file system monitoring data into labeled datasets with time bins. Also, as I noted down the labels while using system normally and with injector, so I have defined the labels, this functions assigns labels too.
+"""
 def aggregate_data_with_labels(input_file, output_file):
     try:
         print("Loading raw data...")
@@ -11,16 +19,17 @@ def aggregate_data_with_labels(input_file, output_file):
 
         # Drop rows with invalid or missing critical values
         critical_columns = ['operation', 'timestamp']
-        print(f"Cleaning data by removing rows with missing values in columns: {critical_columns}...")
         before_cleaning = len(df)
         df = df.dropna(subset=critical_columns)
         after_cleaning = len(df)
         print(f"Rows removed during cleaning: {before_cleaning - after_cleaning}")
 
-        # Define row ranges with labels
+        # This is what I noted down while collecting raw_data
         ranges_with_labels = [
-            (0, 678, "normal"),
-            (679, 1327, "anomaly"),
+            # 0 to 678 records in raw_data, when i was using system normally
+            (0, 678, "normal"), 
+            # 679 to 1327 records in raw_data, when i injected the ransomware
+            (679, 1327, "anomaly"), 
             (1328, 1837, "normal"),
             (1838, 2176, "normal"),
             (2177, 3599, "normal"),
@@ -33,13 +42,14 @@ def aggregate_data_with_labels(input_file, output_file):
             (7919, 9660 , "normal"),
             (9661, 10242, "anomaly"),
             (10243, 10292 , "normal"),
+            (10293 , 18517, "normal"),
+            (18518 , 23731, "normal"),
         ]
 
         aggregated_data = []
 
         for start, end, label in ranges_with_labels:
             print(f"\nProcessing rows {start} to {end} with label '{label}'...")
-
 
             # Validate start and end indices
             if start >= len(df) or end < start:
@@ -61,7 +71,7 @@ def aggregate_data_with_labels(input_file, output_file):
             # Create time bins (3-second window)
             range_df['time_bin'] = (range_df['timestamp'] - range_df['timestamp'].min()).dt.total_seconds() // 3
 
-            # Perform aggregation for full bins
+            # Perform aggregation for full bins i.e records that come under exactly 3 second window
             grouped = range_df.groupby('time_bin')
             aggregated_df = grouped.agg(
                 num_files_affected=('operation', 'count'),
@@ -88,7 +98,7 @@ def aggregate_data_with_labels(input_file, output_file):
             # Round floating-point values to 2 decimal places
             aggregated_df = aggregated_df.round(2)
 
-            # Handle leftover rows
+            # Handle leftover rows i.e records that belong to the current rane, but at the end those could not be make a 3 second bin, so treated as leftover and are added all together as single record. Definitely, it will be record of all rows at the end where bin is less than 3 second
             valid_time_bins = aggregated_df['time_bin']
             leftover_rows = range_df.loc[~range_df['time_bin'].isin(valid_time_bins)]
 
@@ -135,8 +145,11 @@ def aggregate_data_with_labels(input_file, output_file):
     except Exception as e:
         print(f"Error during aggregation: {e}")
 
-# Run the script
 if __name__ == "__main__":
+    
+    # File that contains the output of monitor.py
     input_file = 'raw_data.csv'
+
+    # This will be file used for training
     output_file = 'aggregated_data_with_labels.csv'
     aggregate_data_with_labels(input_file, output_file)

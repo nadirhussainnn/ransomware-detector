@@ -33,8 +33,9 @@ import psutil
 # garbage collector to clean memory when it exceeds vm limit
 import gc
 
-# Directory under attack, we could do this for whole system but injector encrypts files, and we don't want to encrypt systems files or other critical data on our system
-WORKING_DIR = None
+# Allow user to select directory to be monitored
+import tkinter as tk
+from tkinter import filedialog
 
 # Metadata for encryption and renaming, goal is to get original names back upon decryption
 METADATA_FILE = "metadata.json"
@@ -42,6 +43,13 @@ METADATA_FILE = "metadata.json"
 # In-memory metadata for tracking operations: i.e we don't encrypt same file twice, because the goal is to be able to decrypt files back, in return of payment/ransom
 file_metadata = {}  
 
+# Directory under attack, we could do this for whole system but injector encrypts files, and we don't want to encrypt systems files or other critical data on our system
+WORKING_DIR = None
+def select_directory():
+    root = tk.Tk()
+    root.withdraw()  # Hide main window
+    directory = filedialog.askdirectory(title="Select Directory to Monitor")
+    return directory
 
 """Check if the script is running with administrative privileges."""
 def is_admin():
@@ -496,7 +504,7 @@ def inject_operations(duration=180):
             print(f"Error during {operation}: {e}")
 
         # Random delay between operations 0.5 to 2 seconds for I1, I2, I3. 2 to 3 seconds for I4
-        time.sleep(random.uniform(0.5, 2))  
+        time.sleep(random.uniform(0.5, 1.5))  
     save_metadata()
 
 if __name__ == "__main__":
@@ -508,11 +516,12 @@ if __name__ == "__main__":
             )
             
             sys.exit()
-             # Get directory from user
+
+        # Get directory from user
         WORKING_DIR = select_directory()
         if not WORKING_DIR:
             print("No directory selected. Exiting...")
-            return
+            sys.exit()
 
         action = input("Enter 'inject' to inject ransomware or 'decrypt' to decrypt files: ").strip().lower()
         if action == 'inject':

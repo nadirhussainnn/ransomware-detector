@@ -208,6 +208,7 @@ class SystemMetricsCollector:
                 except Exception as e:
                     print(f"Registry error: {e}")
             time.sleep(0.5)
+
     """Continuously monitors CPU, memory, I/O, shadow copies, restore points, and security settings."""
     def monitor_metrics(self):
         while not self.stop_event.is_set():
@@ -304,6 +305,7 @@ class FileEventHandler(FileSystemEventHandler):
             timeout=10
         )
 
+    "It runs in separate thread, calls model to predict on aggregated 3 second bin"
     def aggregate_and_predict(self):
         current_time = time.time()
 
@@ -411,6 +413,7 @@ class FileEventHandler(FileSystemEventHandler):
         norm_memory = memory_usage / 100.0
         return norm_size, norm_cpu, norm_memory
 
+    # Get file size in KBs
     def get_file_size_kb(self, file_path):
         try:
             if os.path.exists(file_path):
