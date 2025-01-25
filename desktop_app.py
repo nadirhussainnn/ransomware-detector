@@ -43,6 +43,8 @@ from tkinter import filedialog
 
 # For alert
 from plyer import notification
+from plyer.utils import platform
+from plyer.platforms.win.notification import WindowsNotification
 
 # Show all columns in pandas DF
 pd.set_option("display.max_columns", None)  
@@ -294,16 +296,38 @@ class FileEventHandler(FileSystemEventHandler):
     
     # Show notifications with title, message and icon
     def show_notification(self, title, message):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(current_dir, "static", "icon.ico")
+        notif_window = tk.Tk()
+        notif_window.title(title)
+        notif_window.geometry("300x100")
+        notif_window.configure(bg='white')
+        notif_window.attributes('-topmost', True)
 
-        notification.notify(
-            title=title,
-            message=message,
-            app_icon = icon_path,
-            app_name="Ransomware Detector",
-            timeout=10
-        )
+        label_title = tk.Label(notif_window, text=title, bg='white', fg='black', font=("Arial", 12, "bold"))
+        label_title.pack(pady=10)
+
+        label_msg = tk.Label(notif_window, text=message, bg='white', fg='black', wraplength=250)
+        label_msg.pack(pady=10)
+
+        def close():
+            notif_window.destroy()
+
+        notif_window.after(5000, close)  # Close after 4 seconds
+        notif_window.mainloop()
+    # def show_notification(self, title, message):
+    #     current_dir = os.path.dirname(os.path.abspath(__file__))
+    #     icon_path = os.path.join(current_dir, "static", "icon.ico")
+
+    #     # Debug print
+    #     print(f"Icon path: {icon_path}")
+    #     print(f"Icon exists: {os.path.exists(icon_path)}")
+
+    #     notification.notify(
+    #         title=title,
+    #         message=message,
+    #         app_icon = icon_path,
+    #         app_name="Ransomware Detector",
+    #         timeout=10
+    #     )
 
     "It runs in separate thread, calls model to predict on aggregated 3 second bin"
     def aggregate_and_predict(self):

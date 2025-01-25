@@ -428,16 +428,16 @@ def inject_operations(duration=180):
     ]
 
     gc.collect()
-    memory_threshold = 85  
+    memory_threshold = 90  
 
 
     while time.time() - start_time < duration:
         
-        # In virtual machine, when memory reaches to its limit, the script halts so to prevent that, and waits for 5 seconds to continue
+        # In virtual machine, when memory reaches to its limit, the script halts so to prevent that, and waits for 3 seconds to continue
         mem = psutil.virtual_memory()
         if mem.percent > memory_threshold:
             print(f"Memory usage critical: {mem.percent}%. Pausing operations.")
-            time.sleep(5)
+            time.sleep(3)
             continue
 
         operation = random.choice(I1) # we just need to change injector types here, for varying behavior. For Ix, the operation is chosen on random. In case of I4, only 1 operation is there
@@ -504,7 +504,7 @@ def inject_operations(duration=180):
             print(f"Error during {operation}: {e}")
 
         # Random delay between operations 0.5 to 2 seconds for I1, I2, I3. 2 to 3 seconds for I4
-        time.sleep(random.uniform(0.5, 1.5))  
+        time.sleep(random.uniform(0.5, 2))  
     save_metadata()
 
 if __name__ == "__main__":
