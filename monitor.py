@@ -1,27 +1,50 @@
+"""
+Decription:     A desktop app, that monitors the data in real-time, saves the data into raw_data.csv 
+Author:         Nadir Hussain
+Dated:          Jan 25, 2025
+"""
+
 import os
 import time
-import csv
-import psutil
+import sys
+import math
 import random
-import ctypes
-import winreg
+import csv
 from threading import Thread, Event
+from collections import deque
+
+# For monitoring filesystem events
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+
+# For capturing keyboard and mouse events
 from pynput import keyboard, mouse
-import math
+
+# For interacting with Windows APIs and settings
+import ctypes
+import winreg
 import win32api
 import win32security
 import win32con
-import sys
-import subprocess
-from collections import deque
 
+# for cpu, memory and other resource details
+import psutil
+
+# For registry edits, shadow copy and restore point operations
+import subprocess
+
+
+# For data collection, I think it's okay to collect in any directory. So i defined this one.
 MONITOR_DIR = "/Users/nadir/ransomware"
 RAW_DATA_CSV = "raw_data.csv"
 
+"""
+Collects and monitors system metrics related to CPU, memory, I/O, and security settings.
+"""
 class SystemMetricsCollector:
     def __init__(self):
+        
+        # Attributes for CPU, memory, I/O counts, security settings etc.
         self.cpu_usage = 0
         self.memory_usage = 0
         self.io_read_count = 0
@@ -46,7 +69,9 @@ class SystemMetricsCollector:
         }
         self.operation_sequences = deque(maxlen=20)
 
-                
+    """
+    Calculates changes in disk I/O (read and write) in kilobytes.
+    """  
     def get_io_counts(self):
         try:
             io_counters = psutil.disk_io_counters()
@@ -62,7 +87,8 @@ class SystemMetricsCollector:
             return delta_read, delta_write
         except:
             return 0, 0
-
+    
+    """Counts the number of shadow copies on the system using the vssadmin tool."""
     def get_shadow_copy_count(self):
         try:
             si = subprocess.STARTUPINFO()
@@ -79,6 +105,7 @@ class SystemMetricsCollector:
             print(f"Shadow copy error: {e}")
             return 0
 
+    """Retrieves the count of system restore points using PowerShell commands."""
     def get_restore_points(self):
         try:
             si = subprocess.STARTUPINFO()
@@ -96,6 +123,7 @@ class SystemMetricsCollector:
             print(f"Restore point error: {e}")
             return 0
 
+    """ Checks for security settings for the system."""
     def check_security_settings(self):
         try:
             # Check Firewall - both paths must be disabled
@@ -133,6 +161,7 @@ class SystemMetricsCollector:
         except Exception as e:
             print(f"Error checking security settings: {e}")
 
+    """Monitors specific registry keys for changes in values."""
     def monitor_registry_changes(self):
         reg_keys = [
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Policies\Microsoft\Windows Defender"),
@@ -163,6 +192,7 @@ class SystemMetricsCollector:
                     print(f"Registry error: {e}")
             time.sleep(0.5)
 
+    """Continuously monitors CPU, memory, I/O, shadow copies, restore points, and security settings."""
     def monitor_metrics(self):
         while not self.stop_event.is_set():
             self.cpu_usage = psutil.cpu_percent(interval=0.1)  # Shorter interval
@@ -175,21 +205,28 @@ class SystemMetricsCollector:
             self.check_security_settings()
             time.sleep(0.1)
 
+"""Monitors keyboard presses and mouse movements"""
 class InputMonitor:
     def __init__(self):
         self.key_presses = 0
         self.mouse_activity = 0
 
+    """Increments the counter for key presses when a key is pressed.
+    In normal, key presses are more, exp: rename. While automated actions have very low key presses
+    """
     def on_key_press(self, key):
         self.key_presses += 1
 
+    """Increments the counter for mouse activity mouse is moved. In normal, mouse movements are more. While auto-mated actions have very low mouse movements"""
     def on_mouse_move(self, x, y):
         self.mouse_activity += 1
 
+    """Resets the counters for key presses and mouse activity to zero"""
     def reset_counters(self):
         self.key_presses = 0
         self.mouse_activity = 0
 
+"""Calculates the Shannon entropy of a file's content to estimate randomness. Encrypted files have more shannon entropy usually"""
 def compute_entropy(file_path):
     try:
         if not os.path.exists(file_path):
@@ -211,6 +248,9 @@ def compute_entropy(file_path):
         return 0.0
 
 
+"""
+Handles file system events and integrates them for a record to be added into csv
+"""
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, metrics_collector, input_monitor):
         super().__init__()
@@ -219,6 +259,7 @@ class FileEventHandler(FileSystemEventHandler):
         self.input = input_monitor
         self.logged_events = {}  # Track last events by file path
 
+    """Analyzes file operation patterns to detect sequential operations and track accessed files. Ransomware typically make large sequential actions for exp it may create folder, then files in it, and then encrypt them. Normal behavior is random"""
     def analyze_file_pattern(self, event_type, file_path):
         current_time = time.time()
         file_key = f"{event_type}:{file_path}"
@@ -258,12 +299,14 @@ class FileEventHandler(FileSystemEventHandler):
         print(f"Operation sequence length: {len(self.metrics.operation_sequences)}")
 
 
+    # normalize file size, cpu and memory usage for consistent scaling
     def normalize_metrics(self, file_size, cpu_usage, memory_usage):
         norm_size = math.log2(file_size + 1) if file_size > 0 else 0
         norm_cpu = cpu_usage / 100.0
         norm_memory = memory_usage / 100.0
         return norm_size, norm_cpu, norm_memory
 
+    # Get file size in KBs
     def get_file_size_kb(self, file_path):
         try:
             if os.path.exists(file_path):
@@ -272,6 +315,7 @@ class FileEventHandler(FileSystemEventHandler):
         except:
             return 0
 
+    """Logs details of a file system event and updates relevant metrics. Creates record into csv upon every event"""
     def log_event(self, event_type, file_path):
         timestamp = time.time()
         time_diff = timestamp - self.last_timestamp if self.last_timestamp else 0
@@ -343,12 +387,14 @@ def main():
         sys.stdout = open('CONOUT$', 'w')
         sys.stderr = open('CONOUT$', 'w')
 
+    # Run under admin previliges
     if not ctypes.windll.shell32.IsUserAnAdmin():
         print("Requesting admin privileges...")
         if sys.argv[-1] != 'asadmin':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__ + ' asadmin', None, 1)
-            #sys.exit()
+            sys.exit()
 
+    # Create raw_data.csv with header row, if it does not exist
     if not os.path.exists(RAW_DATA_CSV):
         with open(RAW_DATA_CSV, mode="w", newline="") as f:
             writer = csv.writer(f)
@@ -361,6 +407,7 @@ def main():
                 "sequential_operations", "operation_sequence_length"
             ])
 
+    # Multiple threads run and they monitor different things
     metrics_collector = SystemMetricsCollector()
     input_monitor = InputMonitor()
 
@@ -375,6 +422,7 @@ def main():
     metrics_thread.start()
     registry_thread.start()
 
+    # Observe all events of files
     event_handler = FileEventHandler(metrics_collector, input_monitor)
     observer = Observer()
     observer.schedule(event_handler, MONITOR_DIR, recursive=True)

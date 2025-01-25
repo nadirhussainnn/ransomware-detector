@@ -1,21 +1,19 @@
+"""
+Decription:     A simple utility to enable/disable firewall, defender, task manager. It also creates restore and shadow copy points
+Author:         Nadir Hussain
+Dated:          Jan 25, 2025
+"""
 import subprocess
 import winreg
 import ctypes
 import sys
 
+"""Check if the script is running with administrative privileges."""
 def is_admin():
-    """Check if the script is running with administrative privileges."""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except Exception:
         return False
-
-if not is_admin():
-    print("Requesting administrative privileges...")
-    ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", sys.executable, " ".join(sys.argv), None, 1
-    )
-    sys.exit()
 
 # Registry key operations
 def modify_registry_key(key, sub_key, value_name, value):
@@ -75,11 +73,18 @@ def list_shadow_copies():
 # Main
 if __name__ == "__main__":
     
+    if not is_admin():
+        print("Requesting administrative privileges...")
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        )
+        sys.exit()
+
     set_defender_state(enable=True)
     set_firewall_state(enable=True)
     set_task_manager_state(enable=True)
 
-    create_restore_point("TestRestorePoint2")
+    create_restore_point("My restore point")
     list_restore_points()
 
     create_shadow_copy("C:")

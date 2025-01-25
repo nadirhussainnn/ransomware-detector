@@ -1,0 +1,24 @@
+Model: Random Forest
+Best Params: {'class_weight': 'balanced_subsample', 'max_depth': 10, 'n_estimators': 50}
+Best MCC Score: 0.8653
+
+Model: Gradient Boosting
+Best Params: {'learning_rate': 0.1, 'max_depth': 3, 'n_estimators': 50}
+Best MCC Score: 0.9006
+
+Model: SVM
+Best Params: {'C': 10, 'gamma': 'scale', 'kernel': 'rbf'}
+Best MCC Score: 0.7345
+
+Model: Logistic Regression
+Best Params: {'C': 10, 'solver': 'lbfgs'}
+Best MCC Score: 0.6208
+
+Model: KNN
+Best Params: {'metric': 'manhattan', 'n_neighbors': 3, 'weights': 'distance'}
+Best MCC Score: 0.7734
+
+Model: Decision Tree
+Best Params: {'class_weight': None, 'max_depth': None, 'min_samples_split': 5}
+Best MCC Score: 0.8546
+
