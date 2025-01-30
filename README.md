@@ -25,6 +25,10 @@ Here's how it works:
 
 By using this project, you acknowledge that you are responsible for your actions and agree to exercise proper caution.  The author is not liable for any data loss or system damage resulting from misuse.  
 
+<h2 style="text-align: center; color: #3a86ff;">Video Demo </h2>
+
+[Ransomware Detection Demo](https://www.youtube.com/watch?v=ybJpgLShSew&t=20s)
+
 <h2 style="text-align: center; color: #3a86ff;"> Problem to be Solved </h2>
 
 Ransomware poses a significant threat to organizations and individuals by encrypting critical files and demanding ransom payments for decryption keys. Traditional antivirus solutions often fail to detect ransomware in real-time, leading to severe data loss and financial damage. This project aims to develop a real-time ransomware detection system for monitoring file system activities, detecting anomalies indicative of ransomware, and preventing damage before it occurs.
