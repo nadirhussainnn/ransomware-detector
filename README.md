@@ -1,4 +1,4 @@
-<h1 align-"center" style="text-align: center; color: #3a86ff;">Real-time Ransomware Detection on a File System</h1>
+<h1 style="text-align: center; color: #3a86ff;">Real-time Ransomware Detection on a File System</h1>
 
 ## ⚠️ Disclaimer  
 
@@ -36,41 +36,41 @@ The solution involves designing and integrating a system that continuously monit
 The monitor is designed to collect real-time metrics from the file system, system resources, system security, access patterns, disk, and user inputs. It runs every 1 second, in an infinite loop (until closed), to keep an eye on events happening in the directory, and in specific parts of the system such as the registry. The choice of 1 second is made based on the fact that monitoring files continuously in short duration can be resource consuming and can make the system slow where it runs, while also it is not kept high to make sure the anomaly (if any), is detected very quickly, without causing too much harm.
 
 The monitor captures the following file system events:
-    - ***File Creation:*** Detection of new files being created.
-    - ***File Modification:*** Changes made to existing files, changes such as content, permission and movement of files.
-    - ***File Deletion:*** Files being deleted from the system.
-    - ***File Renaming:*** Files being renamed.
-    - ***File Encryption:*** Specific detection of files being encrypted (e.g., with ENCRYPTED extensions).
+    - ***File Creation:*** Detection of new files being created. <br>
+    - ***File Modification:*** Changes made to existing files, changes such as content, permission and  movement of files. <br>
+    - ***File Deletion:*** Files being deleted from the system. <br>
+    - ***File Renaming:*** Files being renamed. <br>
+    - ***File Encryption:*** Specific detection of files being encrypted (e.g., with ENCRYPTED extensions). <br>
 
 For every logged event, we create a record in csv after computing these features:
 
 **File System Metrics:**
-    - *Timestamp:* The time when an event occurred on file.
-    - *Operation Type:* Type of event (created, modified, deleted, renamed, or encrypted).
-    - *File Size:* Size of the affected file in KBs (normalized using a logarithmic scale).
-    - *File Extension:* The extension of the affected file (e.g txt, doc, xls, pdf, png, zip etc).
-    - *File Entropy:* Shannon entropy of the file content, indicating randomness (higher entropy suggests encryption).
-    - *Sequential Operations:* Number of sequential operations within a short time frame.
-    - *Operation Sequence Length:* Length of the recorded sequence of operations.
+    - *Timestamp:* The time when an event occurred on file. <br>
+    - *Operation Type:* Type of event (created, modified, deleted, renamed, or encrypted). <br>
+    - *File Size:* Size of the affected file in KBs (normalized using a logarithmic scale). <br>
+    - *File Extension:* The extension of the affected file (e.g txt, doc, xls, pdf, png, zip etc). <br>
+    - *File Entropy:* Shannon entropy of the file content, indicating randomness (higher entropy suggests encryption). <br>
+    - *Sequential Operations:* Number of sequential operations within a short time frame. <br>
+    - *Operation Sequence Length:* Length of the recorded sequence of operations. <br>
 
 **System Resource Metrics:**
-    - *CPU Usage:* Real-time CPU utilization percentage (normalized to 0–1).
-    - *Memory Usage:* Real-time memory utilization percentage (normalized to 0–1).
-    - *Disk I/O Read Count:* Change in the number of disk read operations (in KB).
+    - *CPU Usage:* Real-time CPU utilization percentage (normalized to 0–1). <br>
+    - *Memory Usage:* Real-time memory utilization percentage (normalized to 0–1). <br>
+    - *Disk I/O Read Count:* Change in the number of disk read operations (in KB). <br>
     - *Disk I/O Write Count:* Change in the number of disk write operations (in KB).
 
 **Security Metrics:**
-    - *Shadow Copy Count:* Number of system shadow copies available.
-    - *Restore Point Count:* Number of system restore points available.
+    - *Shadow Copy Count:* Number of system shadow copies available. <br>
+    - *Restore Point Count:* Number of system restore points available. <br>
     - *Registry Edits:* Count of registry modifications.
 
 **Security State Flags:**
-    - *Firewall Disabled:* Boolean flag indicating whether the firewall is disabled when something is happening in the monitored directory.
-    - *Windows Defender Disabled:* Boolean flag indicating whether Windows Defender is disabled when something is happening in the monitored directory.
+    - *Firewall Disabled:* Boolean flag indicating whether the firewall is disabled when something is happening in the monitored directory. <br>
+    - *Windows Defender Disabled:* Boolean flag indicating whether Windows Defender is disabled when something is happening in the monitored directory. <br>
     - *Task Manager Disabled:* Boolean flag indicating whether Task Manager is disabled during a file event.
 
 **User Input Metrics:**
-    - *Key Presses:* Number of keyboard presses during a monitoring period. When event is logged, the number is reset.
+    - *Key Presses:* Number of keyboard presses during a monitoring period. When event is logged, the number is reset. <br>
     - *Mouse Activity:* Number of mouse movements during a monitoring period.When event is logged, the number is reset.
 
 <h2 style="text-align: center; color: #3a86ff;">Selection of Monitored Indicators </h2>
@@ -79,10 +79,10 @@ The indicators were selected based on their relevance to ransomware detection. I
 
 **1. Literature Review**
 
-Research papers and surveys on ransomware behavior and detection using machine learning highlighted key indicators, such as:
-    - **Entropy:** High randomness in file content, typical of encryption.
-    - **Sequential Operations:** Patterns of mass file access or modification.
-    - **Registry Modifications:** Changes in security-related keys, making system calls.
+Research papers and surveys on ransomware behavior and detection using machine learning highlighted key indicators, such as: <br>
+    - **Entropy:** High randomness in file content, typical of encryption. <br>
+    - **Sequential Operations:** Patterns of mass file access or modification. <br>
+    - **Registry Modifications:** Changes in security-related keys, making system calls. <br>
     - **System Security Changes:** Disabling firewalls, antivirus, or recovery mechanisms.
     
 These indicators were validated through studies (*[Amjad Alraizza, 2023]*, *[Avinash Singh, 2022]*).
@@ -186,4 +186,5 @@ The integration of monitor and detector is actually a complete pipeline, where m
 <h2 style="text-align: center; color: #3a86ff;">References </h2>
 
 [Amjad Alraizza, 2023]. [Ransomware Detection Using Machine Learning: A Survey
-](https://www.mdpi.com/2504-2289/7/3/143)[Avinash Singh, 2022]. [Ransomware Detection using Process Memory](https://arxiv.org/abs/2203.16871)
+](https://www.mdpi.com/2504-2289/7/3/143) <br>
+[Avinash Singh, 2022]. [Ransomware Detection using Process Memory](https://arxiv.org/abs/2203.16871)
