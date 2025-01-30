@@ -35,7 +35,7 @@ The solution involves designing and integrating a system that continuously monit
 
 The monitor is designed to collect real-time metrics from the file system, system resources, system security, access patterns, disk, and user inputs. It runs every 1 second, in an infinite loop (until closed), to keep an eye on events happening in the directory, and in specific parts of the system such as the registry. The choice of 1 second is made based on the fact that monitoring files continuously in short duration can be resource consuming and can make the system slow where it runs, while also it is not kept high to make sure the anomaly (if any), is detected very quickly, without causing too much harm.
 
-The monitor captures the following file system events:
+The monitor captures the following file system events: <br>
     - ***File Creation:*** Detection of new files being created. <br>
     - ***File Modification:*** Changes made to existing files, changes such as content, permission and  movement of files. <br>
     - ***File Deletion:*** Files being deleted from the system. <br>
@@ -44,7 +44,7 @@ The monitor captures the following file system events:
 
 For every logged event, we create a record in csv after computing these features:
 
-**File System Metrics:**
+**File System Metrics:** <br>
     - *Timestamp:* The time when an event occurred on file. <br>
     - *Operation Type:* Type of event (created, modified, deleted, renamed, or encrypted). <br>
     - *File Size:* Size of the affected file in KBs (normalized using a logarithmic scale). <br>
@@ -53,23 +53,23 @@ For every logged event, we create a record in csv after computing these features
     - *Sequential Operations:* Number of sequential operations within a short time frame. <br>
     - *Operation Sequence Length:* Length of the recorded sequence of operations. <br>
 
-**System Resource Metrics:**
+**System Resource Metrics:** <br>
     - *CPU Usage:* Real-time CPU utilization percentage (normalized to 0–1). <br>
     - *Memory Usage:* Real-time memory utilization percentage (normalized to 0–1). <br>
     - *Disk I/O Read Count:* Change in the number of disk read operations (in KB). <br>
     - *Disk I/O Write Count:* Change in the number of disk write operations (in KB).
 
-**Security Metrics:**
+**Security Metrics:** <br>
     - *Shadow Copy Count:* Number of system shadow copies available. <br>
     - *Restore Point Count:* Number of system restore points available. <br>
     - *Registry Edits:* Count of registry modifications.
 
-**Security State Flags:**
+**Security State Flags:** <br>
     - *Firewall Disabled:* Boolean flag indicating whether the firewall is disabled when something is happening in the monitored directory. <br>
     - *Windows Defender Disabled:* Boolean flag indicating whether Windows Defender is disabled when something is happening in the monitored directory. <br>
     - *Task Manager Disabled:* Boolean flag indicating whether Task Manager is disabled during a file event.
 
-**User Input Metrics:**
+**User Input Metrics:** <br>
     - *Key Presses:* Number of keyboard presses during a monitoring period. When event is logged, the number is reset. <br>
     - *Mouse Activity:* Number of mouse movements during a monitoring period.When event is logged, the number is reset.
 
