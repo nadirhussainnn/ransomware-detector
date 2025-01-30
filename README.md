@@ -1,4 +1,4 @@
-<h1 style="text-align: center; color: #3a86ff;">Real-time Ransomware Detection on a File System</h1>
+<h1 align-"center" style="text-align: center; color: #3a86ff;">Real-time Ransomware Detection on a File System</h1>
 
 ## ⚠️ Disclaimer  
 
